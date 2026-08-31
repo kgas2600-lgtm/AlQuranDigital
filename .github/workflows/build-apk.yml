@@ -1,9 +1,6 @@
-name: Build APK
+name: Build Al-Quran Digital APK
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -11,50 +8,60 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract project
+      - name: Extract Android project
         run: |
-          unzip -o AlQuranDigitalAndroid_cloudbuild.zip -d extracted
+          rm -rf source
+          unzip -o AlQuranDigitalAndroid_cloudbuild_v2.zip -d source
 
-      - name: Setup Java
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.11.1'
 
-      - name: Fix JVM target
-        working-directory: extracted/AlQuranDigitalAndroid
+      - name: Fix Java and Kotlin JVM target
+        working-directory: source/AlQuranDigitalAndroid
         run: |
           python3 - <<'PY'
-          p = "app/build.gradle.kts"
-          s = open(p).read()
-          s = s.replace(
-              'android {',
-              '''android {
+          from pathlib import Path
+
+          p = Path("app/build.gradle.kts")
+          text = p.read_text()
+
+          if "compileOptions" not in text:
+              text = text.replace(
+                  "android {\n",
+                  """android {
               compileOptions {
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
               }
+
               kotlinOptions {
                   jvmTarget = "17"
-              }'''
-          )
-          open(p, "w").write(s)
+              }
+          """
+              )
+
+          p.write_text(text)
           PY
 
-      - name: Build APK
-        working-directory: extracted/AlQuranDigitalAndroid
-        run: gradle :app:assembleDebug --no-daemon
+      - name: Build Debug APK
+        working-directory: source/AlQuranDigitalAndroid
+        run: |
+          gradle clean assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AlQuranDigital-APK
-          path: extracted/AlQuranDigitalAndroid/app/build/outputs/apk/debug/app-debug.apk
+          name: AlQuranDigital-debug
+          path: source/AlQuranDigitalAndroid/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
