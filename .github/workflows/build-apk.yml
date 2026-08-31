@@ -1,84 +1,139 @@
 name: Build Al-Quran Digital APK
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
+    name: Build Al-Quran Digital APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Cari ZIP project
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Cari ZIP Project
         shell: bash
         run: |
           set -e
 
-          echo "Mencari file ZIP..."
+          echo "Mencari ZIP project..."
 
-          ZIP_FILE=$(find . -maxdepth 2 -type f -name "*.zip" | head -n 1)
+          ZIP_FILE=$(find . \
+            -maxdepth 2 \
+            -type f \
+            -iname "*.zip" \
+            ! -path "./source/*" \
+            | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
             echo "ERROR: ZIP project tidak ditemukan!"
             exit 1
           fi
 
-          echo "ZIP ditemukan: $ZIP_FILE"
+          echo "ZIP ditemukan:"
+          echo "$ZIP_FILE"
+
+          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
+
+      - name: Extract Project
+        shell: bash
+        run: |
+          set -e
 
           rm -rf source
           mkdir -p source
 
           unzip -o "$ZIP_FILE" -d source
 
-      - name: Tampilkan struktur project
-        run: |
-          echo "=== STRUKTUR PROJECT ==="
-          find source -maxdepth 4 -type f | head -100
+          echo "Project berhasil di-extract."
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.11.1'
-
-      - name: Cari project Android
+      - name: Cari Folder Android
         shell: bash
         run: |
           set -e
 
-          PROJECT_DIR=$(find source -type f -name "settings.gradle.kts" -exec dirname {} \; | head -n 1)
+          PROJECT_DIR=$(find source \
+            -type f \
+            -name "settings.gradle.kts" \
+            -exec dirname {} \; \
+            | head -n 1)
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: Project Android tidak ditemukan!"
+            echo "ERROR: settings.gradle.kts tidak ditemukan!"
             exit 1
           fi
 
-          echo "Project ditemukan di: $PROJECT_DIR"
+          echo "Project Android:"
+          echo "$PROJECT_DIR"
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Cek Project
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          echo "=== FILE PROJECT ==="
+          ls -la
+
+          echo ""
+          echo "=== FILE APP ==="
+          ls -la app
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
         run: |
-          gradle clean assembleDebug --no-daemon --stacktrace
+          set -e
 
-      - name: Cari APK
+          echo "================================"
+          echo "MEMBUAT APK..."
+          echo "================================"
+
+          gradle clean assembleDebug \
+            --no-daemon \
+            --stacktrace
+
+      - name: Cek APK
+        shell: bash
         run: |
-          echo "=== APK ==="
-          find source -type f -name "*.apk" -print
+          echo "================================"
+          echo "HASIL APK"
+          echo "================================"
+
+          find "${PROJECT_DIR}" \
+            -type f \
+            -name "*.apk" \
+            -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AlQuranDigital-APK
-          path: source/**/app/build/outputs/apk/debug/*.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Build Berhasil
+        if: success()
+        run: |
+          echo "================================"
+          echo "✅ BUILD BERHASIL!"
+          echo "✅ APK SUDAH JADI!"
+          echo "================================"
