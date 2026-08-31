@@ -1,6 +1,9 @@
 name: Build Al-Quran Digital APK
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -11,57 +14,73 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract Android project
-        run: |
-          rm -rf source
-          unzip -o AlQuranDigitalAndroid_cloudbuild_v2.zip -d source
-
-      - name: Set up JDK 17
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.11.1'
-
-      - name: Fix Java and Kotlin JVM target
-        working-directory: source/AlQuranDigitalAndroid
+      - name: Cari dan Extract Android Project
+        shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
+          set -e
 
-          p = Path("app/build.gradle.kts")
-          text = p.read_text()
+          echo "=== FILE ZIP YANG DITEMUKAN ==="
+          find . -maxdepth 2 -type f -iname "*.zip" -print
 
-          if "compileOptions" not in text:
-              text = text.replace(
-                  "android {\n",
-                  """android {
-              compileOptions {
-                  sourceCompatibility = JavaVersion.VERSION_17
-                  targetCompatibility = JavaVersion.VERSION_17
-              }
+          ZIP_FILE=$(find . -maxdepth 2 -type f -iname "*.zip" | head -n 1)
 
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-          """
-              )
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: File ZIP tidak ditemukan!"
+            exit 1
+          fi
 
-          p.write_text(text)
-          PY
+          echo "ZIP ditemukan: $ZIP_FILE"
+
+          mkdir -p extracted
+          unzip -o "$ZIP_FILE" -d extracted
+
+          echo "=== HASIL EXTRACT ==="
+          find extracted -maxdepth 3 -type f | head -100
+
+      - name: Cari Gradle Project
+        shell: bash
+        run: |
+          set -e
+
+          GRADLEW=$(find extracted -type f -name "gradlew" | head -n 1)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew tidak ditemukan!"
+            echo "Pastikan ZIP berisi project Android."
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
+
+          echo "Gradle project ditemukan:"
+          echo "$PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Beri izin Gradle
+        run: |
+          chmod +x "$PROJECT_DIR/gradlew"
 
       - name: Build Debug APK
-        working-directory: source/AlQuranDigitalAndroid
+        working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          gradle clean assembleDebug --no-daemon
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Cari APK
+        shell: bash
+        run: |
+          echo "=== APK HASIL BUILD ==="
+          find "$PROJECT_DIR" -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AlQuranDigital-debug
-          path: source/AlQuranDigitalAndroid/app/build/outputs/apk/debug/app-debug.apk
+          name: AlQuranDigital-APK
+          path: ${{ env.PROJECT_DIR }}/**/build/outputs/apk/**/*.apk
           if-no-files-found: error
