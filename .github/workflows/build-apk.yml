@@ -17,7 +17,6 @@ jobs:
       - name: Extract project
         run: |
           unzip -o AlQuranDigitalAndroid_cloudbuild.zip -d extracted
-          cd extracted/AlQuranDigitalAndroid
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -29,6 +28,26 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
+      - name: Fix JVM target
+        working-directory: extracted/AlQuranDigitalAndroid
+        run: |
+          python3 - <<'PY'
+          p = "app/build.gradle.kts"
+          s = open(p).read()
+          s = s.replace(
+              'android {',
+              '''android {
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }'''
+          )
+          open(p, "w").write(s)
+          PY
 
       - name: Build APK
         working-directory: extracted/AlQuranDigitalAndroid
