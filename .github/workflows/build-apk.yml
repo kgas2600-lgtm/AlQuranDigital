@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -24,6 +25,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
       - name: Cari ZIP Project
         shell: bash
         run: |
@@ -32,6 +38,7 @@ jobs:
           echo "=== MENCARI ZIP PROJECT ==="
 
           ZIP_FILE=$(find . \
+            -maxdepth 2 \
             -type f \
             -iname "*.zip" \
             ! -path "./.git/*" \
@@ -42,7 +49,9 @@ jobs:
             exit 1
           fi
 
-          echo "ZIP ditemukan: $ZIP_FILE"
+          echo "ZIP ditemukan:"
+          echo "$ZIP_FILE"
+
           echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
       - name: Extract Project
@@ -76,11 +85,12 @@ jobs:
 
           if [ -z "$PROJECT_DIR" ]; then
             echo "ERROR: Android project tidak ditemukan!"
-            echo "settings.gradle/settings.gradle.kts tidak ada."
             exit 1
           fi
 
-          echo "Project ditemukan: $PROJECT_DIR"
+          echo "Project ditemukan:"
+          echo "$PROJECT_DIR"
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Cek Struktur Project
@@ -91,20 +101,7 @@ jobs:
           ls -la
 
           echo "=== APP ==="
-          ls -la app || true
-
-      - name: Cek Gradle Wrapper
-        working-directory: ${{ env.PROJECT_DIR }}
-        shell: bash
-        run: |
-          if [ ! -f "./gradlew" ]; then
-            echo "ERROR: gradlew tidak ditemukan!"
-            exit 1
-          fi
-
-          chmod +x ./gradlew
-
-          echo "Gradle Wrapper ditemukan."
+          ls -la app
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
@@ -114,14 +111,14 @@ jobs:
 
           echo "=== BUILD APK ==="
 
-          ./gradlew clean assembleDebug \
+          gradle clean assembleDebug \
             --no-daemon \
             --stacktrace
 
       - name: Cari APK
         shell: bash
         run: |
-          echo "=== APK HASIL BUILD ==="
+          echo "=== HASIL APK ==="
 
           find "${PROJECT_DIR}" \
             -type f \
