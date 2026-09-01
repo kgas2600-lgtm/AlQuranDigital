@@ -2,6 +2,9 @@ name: Build Al-Quran Digital APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -21,8 +24,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - name: Setup Gradle 8.9
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -31,8 +35,6 @@ jobs:
         shell: bash
         run: |
           set -e
-
-          echo "=== MENCARI ZIP PROJECT ==="
 
           ZIP_FILE=$(find . \
             -maxdepth 2 \
@@ -54,38 +56,32 @@ jobs:
         run: |
           set -e
 
-          echo "=== EXTRACT PROJECT ==="
-
           rm -rf source
           mkdir -p source
 
           unzip -o "$ZIP_FILE" -d source
 
-          echo "Project berhasil diekstrak."
+          echo "=== HASIL EXTRACT ==="
+          find source -maxdepth 5 -type f | head -200
 
       - name: Cari Android Project
         shell: bash
         run: |
           set -e
 
-          SETTINGS=$(find source -type f \
-            \( \
-              -name "settings.gradle.kts" \
-              -o \
-              -name "settings.gradle" \
-            \) \
+          SETTINGS=$(find source \
+            -type f \
+            \( -name "settings.gradle.kts" -o -name "settings.gradle" \) \
             | head -n 1)
 
           if [ -z "$SETTINGS" ]; then
-            echo "ERROR: settings.gradle(.kts) tidak ditemukan!"
+            echo "ERROR: settings.gradle tidak ditemukan!"
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$SETTINGS")
 
-          echo "Project ditemukan:"
-          echo "$PROJECT_DIR"
-
+          echo "Project ditemukan: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Cek Project
@@ -94,16 +90,11 @@ jobs:
         run: |
           set -e
 
-          echo "=== STRUKTUR PROJECT ==="
-
+          echo "=== PROJECT ==="
           ls -la
 
-          if [ ! -d "app" ]; then
-            echo "ERROR: folder app tidak ditemukan!"
-            exit 1
-          fi
-
-          echo "Folder app ditemukan."
+          echo "=== APP ==="
+          ls -la app
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
@@ -112,40 +103,24 @@ jobs:
           set -e
 
           echo "================================"
-          echo "BUILD APK"
+          echo "BUILD AL-QURAN DIGITAL APK"
           echo "================================"
 
           gradle clean assembleDebug \
             --no-daemon \
             --stacktrace
 
-      - name: Cek APK
-        working-directory: ${{ env.PROJECT_DIR }}
+      - name: Cari APK
         shell: bash
         run: |
-          set -e
-
           echo "================================"
-          echo "MENCARI APK"
+          echo "APK HASIL BUILD"
           echo "================================"
 
-          find app/build/outputs \
+          find "${PROJECT_DIR}" \
             -type f \
             -name "*.apk" \
             -print
-
-          APK=$(find app/build/outputs \
-            -type f \
-            -name "*.apk" \
-            | head -n 1)
-
-          if [ -z "$APK" ]; then
-            echo "ERROR: APK tidak ditemukan!"
-            exit 1
-          fi
-
-          echo "APK ditemukan:"
-          echo "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -154,9 +129,10 @@ jobs:
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Selesai
+      - name: Build Berhasil
         if: success()
         run: |
-          echo "========================================"
-          echo "✅ BUILD APK BERHASIL!"
-          echo "========================================"
+          echo "================================"
+          echo "✅ BUILD BERHASIL!"
+          echo "✅ APK SUDAH JADI!"
+          echo "================================"
