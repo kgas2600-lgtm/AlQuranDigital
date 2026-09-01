@@ -15,7 +15,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -25,32 +24,25 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-
       - name: Cari ZIP Project
         shell: bash
         run: |
           set -e
 
-          echo "=== MENCARI ZIP ==="
+          echo "=== MENCARI ZIP PROJECT ==="
 
           ZIP_FILE=$(find . \
-            -maxdepth 2 \
             -type f \
             -iname "*.zip" \
+            ! -path "./.git/*" \
             | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: ZIP tidak ditemukan!"
+            echo "ERROR: ZIP project tidak ditemukan!"
             exit 1
           fi
 
-          echo "ZIP ditemukan:"
-          echo "$ZIP_FILE"
-
+          echo "ZIP ditemukan: $ZIP_FILE"
           echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
       - name: Extract Project
@@ -71,30 +63,48 @@ jobs:
         run: |
           set -e
 
-          PROJECT_DIR=$(find source \
+          PROJECT_DIR=""
+
+          SETTINGS=$(find source \
             -type f \
-            -name "settings.gradle.kts" \
-            -exec dirname {} \; \
+            \( -name "settings.gradle.kts" -o -name "settings.gradle" \) \
             | head -n 1)
 
+          if [ -n "$SETTINGS" ]; then
+            PROJECT_DIR=$(dirname "$SETTINGS")
+          fi
+
           if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: settings.gradle.kts tidak ditemukan!"
+            echo "ERROR: Android project tidak ditemukan!"
+            echo "settings.gradle/settings.gradle.kts tidak ada."
             exit 1
           fi
 
-          echo "Project ditemukan:"
-          echo "$PROJECT_DIR"
-
+          echo "Project ditemukan: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Cek Struktur Project
         working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
         run: |
           echo "=== PROJECT ==="
           ls -la
 
           echo "=== APP ==="
-          ls -la app
+          ls -la app || true
+
+      - name: Cek Gradle Wrapper
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          if [ ! -f "./gradlew" ]; then
+            echo "ERROR: gradlew tidak ditemukan!"
+            exit 1
+          fi
+
+          chmod +x ./gradlew
+
+          echo "Gradle Wrapper ditemukan."
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
@@ -104,14 +114,14 @@ jobs:
 
           echo "=== BUILD APK ==="
 
-          gradle clean assembleDebug \
+          ./gradlew clean assembleDebug \
             --no-daemon \
             --stacktrace
 
       - name: Cari APK
         shell: bash
         run: |
-          echo "=== APK ==="
+          echo "=== APK HASIL BUILD ==="
 
           find "${PROJECT_DIR}" \
             -type f \
