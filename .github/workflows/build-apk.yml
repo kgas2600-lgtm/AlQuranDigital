@@ -1,9 +1,6 @@
 name: Build Al-Quran Digital APK
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -25,7 +22,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle
+      - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -34,6 +31,8 @@ jobs:
         shell: bash
         run: |
           set -e
+
+          echo "=== MENCARI ZIP PROJECT ==="
 
           ZIP_FILE=$(find . \
             -maxdepth 2 \
@@ -55,6 +54,8 @@ jobs:
         run: |
           set -e
 
+          echo "=== EXTRACT PROJECT ==="
+
           rm -rf source
           mkdir -p source
 
@@ -67,8 +68,7 @@ jobs:
         run: |
           set -e
 
-          SETTINGS=$(find source \
-            -type f \
+          SETTINGS=$(find source -type f \
             \( \
               -name "settings.gradle.kts" \
               -o \
@@ -77,25 +77,33 @@ jobs:
             | head -n 1)
 
           if [ -z "$SETTINGS" ]; then
-            echo "ERROR: settings.gradle tidak ditemukan!"
+            echo "ERROR: settings.gradle(.kts) tidak ditemukan!"
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$SETTINGS")
 
-          echo "Project: $PROJECT_DIR"
+          echo "Project ditemukan:"
+          echo "$PROJECT_DIR"
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Cek Project
         working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
         run: |
           set -e
 
-          echo "=== PROJECT ==="
+          echo "=== STRUKTUR PROJECT ==="
+
           ls -la
 
-          echo "=== APP ==="
-          ls -la app
+          if [ ! -d "app" ]; then
+            echo "ERROR: folder app tidak ditemukan!"
+            exit 1
+          fi
+
+          echo "Folder app ditemukan."
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
@@ -111,29 +119,44 @@ jobs:
             --no-daemon \
             --stacktrace
 
-      - name: Cari APK
+      - name: Cek APK
+        working-directory: ${{ env.PROJECT_DIR }}
         shell: bash
         run: |
           set -e
 
-          echo "=== APK HASIL BUILD ==="
+          echo "================================"
+          echo "MENCARI APK"
+          echo "================================"
 
-          find "${PROJECT_DIR}" \
+          find app/build/outputs \
             -type f \
             -name "*.apk" \
             -print
+
+          APK=$(find app/build/outputs \
+            -type f \
+            -name "*.apk" \
+            | head -n 1)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK tidak ditemukan!"
+            exit 1
+          fi
+
+          echo "APK ditemukan:"
+          echo "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AlQuranDigital-APK
-          path: |
-            ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Selesai
         if: success()
         run: |
-          echo "================================"
-          echo "✅ BUILD APK BERHASIL"
-          echo "================================"
+          echo "========================================"
+          echo "✅ BUILD APK BERHASIL!"
+          echo "========================================"
