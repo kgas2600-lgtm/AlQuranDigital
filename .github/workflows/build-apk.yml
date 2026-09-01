@@ -1,10 +1,10 @@
 name: Build Al-Quran Digital APK
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -35,8 +35,6 @@ jobs:
         run: |
           set -e
 
-          echo "=== MENCARI ZIP PROJECT ==="
-
           ZIP_FILE=$(find . \
             -maxdepth 2 \
             -type f \
@@ -49,9 +47,7 @@ jobs:
             exit 1
           fi
 
-          echo "ZIP ditemukan:"
-          echo "$ZIP_FILE"
-
+          echo "ZIP ditemukan: $ZIP_FILE"
           echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
 
       - name: Extract Project
@@ -64,39 +60,37 @@ jobs:
 
           unzip -o "$ZIP_FILE" -d source
 
-          echo "=== HASIL EXTRACT ==="
-          find source -maxdepth 5 -type f | head -150
+          echo "Project berhasil diekstrak."
 
       - name: Cari Android Project
         shell: bash
         run: |
           set -e
 
-          PROJECT_DIR=""
-
           SETTINGS=$(find source \
             -type f \
-            \( -name "settings.gradle.kts" -o -name "settings.gradle" \) \
+            \( \
+              -name "settings.gradle.kts" \
+              -o \
+              -name "settings.gradle" \
+            \) \
             | head -n 1)
 
-          if [ -n "$SETTINGS" ]; then
-            PROJECT_DIR=$(dirname "$SETTINGS")
-          fi
-
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: Android project tidak ditemukan!"
+          if [ -z "$SETTINGS" ]; then
+            echo "ERROR: settings.gradle tidak ditemukan!"
             exit 1
           fi
 
-          echo "Project ditemukan:"
-          echo "$PROJECT_DIR"
+          PROJECT_DIR=$(dirname "$SETTINGS")
 
+          echo "Project: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Cek Struktur Project
+      - name: Cek Project
         working-directory: ${{ env.PROJECT_DIR }}
-        shell: bash
         run: |
+          set -e
+
           echo "=== PROJECT ==="
           ls -la
 
@@ -109,7 +103,9 @@ jobs:
         run: |
           set -e
 
-          echo "=== BUILD APK ==="
+          echo "================================"
+          echo "BUILD APK"
+          echo "================================"
 
           gradle clean assembleDebug \
             --no-daemon \
@@ -118,7 +114,9 @@ jobs:
       - name: Cari APK
         shell: bash
         run: |
-          echo "=== HASIL APK ==="
+          set -e
+
+          echo "=== APK HASIL BUILD ==="
 
           find "${PROJECT_DIR}" \
             -type f \
@@ -129,12 +127,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: AlQuranDigital-APK
-          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          path: |
+            ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Build Berhasil
+      - name: Selesai
         if: success()
         run: |
           echo "================================"
-          echo "✅ APK BERHASIL DIBUAT"
+          echo "✅ BUILD APK BERHASIL"
           echo "================================"
